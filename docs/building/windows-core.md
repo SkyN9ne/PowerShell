@@ -29,7 +29,7 @@ that you must have PowerShell Core 6 Beta.9 (or newer) installed to successfully
 
 ### .NET CLI
 
-We use the [.NET Command Line Interface][dotnet-cli] (`dotnet`) to build PowerShell.
+We use the [.NET command-line interface][dotnet-cli] (`dotnet`) to build PowerShell.
 The version we are currently using is mentioned in [`global.json`](../../global.json#L3) at the root of this repository.
 The `Start-PSBootstrap` function will automatically install it and add it to your path:
 
@@ -47,7 +47,7 @@ Install-Dotnet
 It removes the previously installed version of .NET CLI and installs the version that PowerShell Core depends on.
 If you have any problems installing `dotnet`, please see their [documentation][cli-docs].
 
-[dotnet-cli]: https://docs.microsoft.com/dotnet/core/tools/
+[dotnet-cli]: https://learn.microsoft.com/dotnet/core/tools/
 [cli-docs]: https://www.microsoft.com/net/core#windowscmd
 
 ## Build using our module
@@ -56,7 +56,7 @@ We maintain a [PowerShell module](../../build.psm1) with the function `Start-PSB
 
 ```powershell
 Import-Module ./build.psm1
-Start-PSBuild
+Start-PSBuild -Clean -PSModuleRestore
 ```
 
 Congratulations! If everything went right, PowerShell is now built and executable as `./src/powershell-win-core/bin/Debug/net6.0/win7-x64/publish/pwsh.exe`.

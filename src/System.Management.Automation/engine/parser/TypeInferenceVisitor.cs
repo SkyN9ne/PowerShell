@@ -364,7 +364,22 @@ namespace System.Management.Automation
                 filterToCall = filter;
             }
 
-            results.AddRange(GetMembersByInferredType(new PSTypeName(typeof(object)), isStatic, filterToCall));
+            PSTypeName baseMembersType;
+            if (typename.TypeDefinitionAst.IsEnum)
+            {
+                if (!isStatic)
+                {
+                    results.Add(new PSInferredProperty("value__", new PSTypeName(typeof(int))));
+                }
+
+                baseMembersType = new PSTypeName(typeof(Enum));
+            }
+            else
+            {
+                baseMembersType = new PSTypeName(typeof(object));
+            }
+
+            results.AddRange(GetMembersByInferredType(baseMembersType, isStatic, filterToCall));
         }
 
         internal void AddMembersByInferredTypeCimType(PSTypeName typename, List<object> results, Func<object, bool> filterToCall)
@@ -569,6 +584,20 @@ namespace System.Management.Automation
             if (hashtableAst.KeyValuePairs.Count > 0)
             {
                 var properties = new List<PSMemberNameAndType>();
+                void AddInferredTypes(Ast ast, string keyName)
+                {
+                    bool foundAnyTypes = false;
+                    foreach (PSTypeName item in InferTypes(ast))
+                    {
+                        foundAnyTypes = true;
+                        properties.Add(new PSMemberNameAndType(keyName, item));
+                    }
+
+                    if (!foundAnyTypes)
+                    {
+                        properties.Add(new PSMemberNameAndType(keyName, new PSTypeName("System.Object")));
+                    }
+                }
 
                 foreach (var kv in hashtableAst.KeyValuePairs)
                 {
@@ -600,31 +629,18 @@ namespace System.Management.Automation
                                 _ = SafeExprEvaluator.TrySafeEval(expression, _context.ExecutionContext, out value);
                             }
 
-                            PSTypeName valueType;
                             if (value is null)
                             {
-                                valueType = new PSTypeName("System.Object");
-                            }
-                            else
-                            {
-                                valueType = new PSTypeName(value.GetType());
+                                AddInferredTypes(expression, name);
+                                continue;
                             }
 
+                            PSTypeName valueType = new(value.GetType());
                             properties.Add(new PSMemberNameAndType(name, valueType, value));
                         }
                         else
                         {
-                            bool foundAnyTypes = false;
-                            foreach (var item in InferTypes(kv.Item2))
-                            {
-                                foundAnyTypes = true;
-                                properties.Add(new PSMemberNameAndType(name, item));
-                            }
-
-                            if (!foundAnyTypes)
-                            {
-                                properties.Add(new PSMemberNameAndType(name, new PSTypeName("System.Object")));
-                            }
+                            AddInferredTypes(kv.Item2, name);
                         }
                     }
                 }
@@ -707,6 +723,11 @@ namespace System.Management.Automation
             // The reflection type of PSCustomObject is PSObject, so this covers both the
             // [PSObject] @{ Key = "Value" } and the [PSCustomObject] @{ Key = "Value" } case.
             var type = convertExpressionAst.Type.TypeName.GetReflectionType();
+
+            if (type is null && convertExpressionAst.Type.TypeName is TypeName unavailableType && unavailableType._typeDefinitionAst is not null)
+            {
+                return new[] { new PSTypeName(unavailableType._typeDefinitionAst) };
+            }
 
             if (type == typeof(PSObject) && convertExpressionAst.Child is HashtableAst hashtableAst)
             {
@@ -1619,7 +1640,7 @@ namespace System.Management.Automation
             var memberNameList = new List<string> { memberAsStringConst.Value };
             foreach (var type in exprType)
             {
-                if (type.Type == typeof(PSObject))
+                if (type.Type == typeof(PSObject) && type is not PSSyntheticTypeName)
                 {
                     continue;
                 }
@@ -1963,8 +1984,19 @@ namespace System.Management.Automation
                     {
                         if (switchErrorStatement.Conditions?.Count > 0)
                         {
-                            parent = switchErrorStatement.Conditions[0];
+                            if (switchErrorStatement.Conditions[0].Extent.EndOffset < variableExpressionAst.Extent.StartOffset)
+                            {
+                                parent = switchErrorStatement.Conditions[0];
+                                break;
+                            }
+                            else
+                            {
+                                // $_ is inside the condition that is being declared, eg: Get-Process | Sort-Object -Property {switch ($_.Proc<Tab>
+                                parent = switchErrorStatement.Parent;
+                                continue;
+                            }
                         }
+
                         break;
                     }
                     else if (parent is ScriptBlockExpressionAst)
@@ -2101,11 +2133,6 @@ namespace System.Management.Automation
                 parent = parent.Parent;
             }
 
-            if (parent.Parent is FunctionDefinitionAst)
-            {
-                parent = parent.Parent;
-            }
-
             int startOffset = variableExpressionAst.Extent.StartOffset;
             var targetAsts = (List<Ast>)AstSearcher.FindAll(
                 parent,
@@ -2145,9 +2172,9 @@ namespace System.Management.Automation
 
             // If any of the assignments lhs use a type constraint, then we use that.
             // Otherwise, we use the rhs of the "nearest" assignment
-            foreach (var assignAst in assignAsts)
+            for (int i = assignAsts.Length - 1; i >= 0; i--)
             {
-                if (assignAst.Left is ConvertExpressionAst lhsConvert)
+                if (assignAsts[i].Left is ConvertExpressionAst lhsConvert)
                 {
                     inferredTypes.Add(new PSTypeName(lhsConvert.Type.TypeName));
                     return;
@@ -2572,7 +2599,8 @@ namespace System.Management.Automation
             if (parameterAst != null)
             {
                 return variableAstVariablePath.IsUnscopedVariable &&
-                       parameterAst.Name.VariablePath.UnqualifiedPath.Equals(variableAstVariablePath.UnqualifiedPath, StringComparison.OrdinalIgnoreCase);
+                       parameterAst.Name.VariablePath.UnqualifiedPath.Equals(variableAstVariablePath.UnqualifiedPath, StringComparison.OrdinalIgnoreCase) &&
+                       parameterAst.Parent.Parent.Extent.EndOffset > variableAst.Extent.StartOffset;
             }
 
             if (ast is ForEachStatementAst foreachAst)

@@ -36,10 +36,19 @@ FunctionsToExport = @(
         'Test-IsVstsLinux'
         'Test-IsVstsWindows'
         'Test-IsWindowsArm64'
+        'Test-IsWinServer2012R2'
         'Test-IsWinWow64'
+        'Test-IsWindows2016'
         'Test-TesthookIsSet'
         'Wait-FileToBePresent'
         'Wait-UntilTrue'
+        'Initialize-PSDefaultParameterValue'
+        'Reset-DefaultParameterValueStack'
+        'Get-DefaultParameterValueStack'
+        'Test-PSDefaultParameterValue'
+        'Push-DefaultParameterValueStack'
+        'Pop-DefaultParameterValueStack'
+        'Get-HelpNetworkTestCases'
     )
 
 CmdletsToExport= @()

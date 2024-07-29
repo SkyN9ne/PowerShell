@@ -1379,10 +1379,40 @@ Describe "Type inference Tests" -tags "CI" {
         $res.Name -join ' ' | Should -Be "System.IO.FileInfo System.IO.DirectoryInfo"
     }
 
+    It 'Falls back to type inference for hashtable assignments with pure expression with no value' {
+        $res = [AstTypeInference]::InferTypeOf( {$KeyWithNoValue = Get-ChildItem $HOME; (@{RandomKey = $KeyWithNoValue}).RandomKey }.Ast)
+        $Res.Count | Should -Be 2
+        $res.Name -join ' ' | Should -Be "System.IO.FileInfo System.IO.DirectoryInfo"
+    }
+
     It 'Infers type of index expression on hashtable with synthetic type' {
         $res = [AstTypeInference]::InferTypeOf( { (@{RandomKey = Get-ChildItem $HOME})['RandomKey'] }.Ast)
         $res.Count | Should -Be 2
         $res.Name -join ' ' | Should -Be "System.IO.FileInfo System.IO.DirectoryInfo"
+    }
+
+    It 'Infers type of member expression on a custom object' {
+        $res = [AstTypeInference]::InferTypeOf( { ([pscustomobject]@{RandomProp1 = Get-ChildItem $HOME}).RandomProp1 }.Ast)
+        $res.Count | Should -Be 2
+        $res.Name -join ' ' | Should -Be "System.IO.FileInfo System.IO.DirectoryInfo"
+    }
+
+    It 'Infers closest variable type' {
+        $res = [AstTypeInference]::InferTypeOf( { [string]$TestVar = "";[hashtable]$TestVar = @{};$TestVar }.Ast)
+        $res.Name | Select-Object -Last 1 | Should -Be "System.Collections.Hashtable"
+    }
+
+    It 'Infers closest variable type and ignores unrelated param blocks' {
+        $res = [AstTypeInference]::InferTypeOf( {
+        [hashtable]$ParameterName=@{}
+        function Verb-Noun {
+            param
+            (
+                [string]$ParameterName
+            )
+        }
+        $ParameterName }.Ast)
+        $res.Name | Should -Be "System.Collections.Hashtable"
     }
 
     It 'Infers type of $null after variable assignment' {

@@ -111,6 +111,13 @@ namespace Microsoft.PowerShell.Commands
         private bool _unique;
 
         /// <summary>
+        /// Gets or sets case insensitive switch for string comparison.
+        /// Used in combination with Unique switch parameter.
+        /// </summary>
+        [Parameter]
+        public SwitchParameter CaseInsensitive { get; set; }
+
+        /// <summary>
         /// </summary>
         /// <value></value>
         [Parameter(ParameterSetName = "DefaultParameter")]
@@ -144,10 +151,11 @@ namespace Microsoft.PowerShell.Commands
         private bool _firstOrLastSpecified;
 
         /// <summary>
-        /// Skips the specified number of items from top when used with First, from end when used with Last.
+        /// Skips the specified number of items from top when used with First, from end when used with Last or SkipLast.
         /// </summary>
         /// <value></value>
         [Parameter(ParameterSetName = "DefaultParameter")]
+        [Parameter(ParameterSetName = "SkipLastParameter")]
         [ValidateRange(0, int.MaxValue)]
         public int Skip { get; set; }
 
@@ -631,7 +639,11 @@ namespace Microsoft.PowerShell.Commands
                 bool isObjUnique = true;
                 foreach (UniquePSObjectHelper uniqueObj in _uniques)
                 {
-                    ObjectCommandComparer comparer = new(true, CultureInfo.CurrentCulture, true);
+                    ObjectCommandComparer comparer = new(
+                        ascending: true,
+                        CultureInfo.CurrentCulture,
+                        caseSensitive: !CaseInsensitive.IsPresent);
+
                     if ((comparer.Compare(obj.BaseObject, uniqueObj.WrittenObject.BaseObject) == 0) &&
                         (uniqueObj.NotePropertyCount == addedNoteProperties.Count))
                     {
